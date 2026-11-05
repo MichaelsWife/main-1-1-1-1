@@ -1,29 +1,26 @@
-# The Rapture — Starter App
+# The Rapture — E-commerce starter
 
-A small Next.js app with ready-to-configure Supabase and MongoDB connections.
+A Next.js App Router storefront with Supabase Auth and MongoDB catalog/order storage.
 
-## Run locally
+## Local setup
 
-1. Install Node.js 20 or newer.
-2. Install dependencies: `npm install`
-3. Copy `.env.example` to `.env.local` and add your service credentials.
-4. Start the app: `npm run dev`
-5. Open [http://localhost:3000](http://localhost:3000).
+1. Use Node.js 20+ and run `npm install`.
+2. Copy `.env.example` to `.env.local`; set the Supabase project URL, publishable/anon key, MongoDB connection string, and database name.
+3. In Supabase Auth settings, configure your local and deployed site URLs and allow the `/auth/callback` redirect URL.
+4. Seed the sample catalog with `npm run seed` (uses the configured MongoDB database).
+5. Run `npm run dev`, then open `http://localhost:3000`.
 
-The home page checks both connections. Supabase is checked through its Auth health endpoint; MongoDB is checked with a ping command.
+## Architecture and data model
 
-## Configure services
+- **Supabase Auth** is the identity provider. `@supabase/ssr` stores/refreshes sessions in secure cookies. Server-side protected pages and order APIs call `auth.getUser()`; never trust a user ID supplied by the browser.
+- **MongoDB `products`**: `{ _id, name, slug, description, priceCents, currency, imageUrl?, category, active, createdAt, updatedAt }`. Unique slug and catalog indexes are created by the seed script / `ensureStoreIndexes` helper.
+- **MongoDB `orders`**: `{ _id, userId, email, status, items: [{ productId, name, unitPriceCents, quantity, lineTotalCents }], currency, subtotalCents, shippingAddress, createdAt, updatedAt }`. Orders store product snapshots so later catalog changes do not rewrite order history. User ID is the Supabase Auth UUID; index supports user-owned order lookup.
+- `GET /api/products` returns active products. `GET /api/orders` returns only the signed-in user's orders. `POST /api/orders` requires auth, validates input, fetches current active products and calculates prices/totals on the server.
 
-- **Supabase:** In your Supabase project settings, copy the Project URL and the publishable/anon key into `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY`. The browser client helper is at `lib/supabase/client.ts`.
-- **MongoDB:** Copy your connection string into `MONGODB_URI` and optionally set `MONGODB_DB` (defaults to `therapture`). The MongoDB driver helper is at `lib/mongodb.ts`.
+## Security and production checklist
 
-A MongoDB example API is included:
-
-- `GET /api/notes` — list up to 50 notes.
-- `POST /api/notes` — create a note with JSON such as `{"title":"My first note"}`.
-
-## Security notes
-
-- Never put your MongoDB connection string or a Supabase `service_role`/secret key in a `NEXT_PUBLIC_` variable. Keep secrets in `.env.local` or your hosting provider's server-side environment settings.
-- The Supabase anon/publishable key is intended for client-side use, but secure your tables with Row Level Security (RLS) policies before storing data.
-- The included notes endpoint is a starter example; add authentication and authorization before using it with private or production data.
+- Keep `MONGODB_URI` private and server-only. The Supabase publishable/anon key is safe to expose, but enable email confirmation and apply appropriate Supabase Auth policies/settings.
+- MongoDB should use a dedicated least-privilege app user, TLS, network access restrictions, backups, and monitoring. Do not expose MongoDB credentials to the browser.
+- The starter creates **pending orders only**. It does not collect payment or mark orders paid. Before taking real orders, integrate a payment provider using server-created payment sessions and signed webhooks; only verified webhooks should update order payment status. Add tax/shipping calculations, stock reservation/atomic inventory handling, idempotency keys, rate limiting, email notifications, admin authorization, and privacy/retention policies for shipping addresses.
+- Add image hosting and validate/allowlist image URLs before enabling product management. Seed products are examples, not production inventory.
+- Add automated tests and deploy with environment variables set in your hosting provider. Check `npm run typecheck` and `npm run build` before launch.
