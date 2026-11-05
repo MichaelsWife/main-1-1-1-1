@@ -26,6 +26,7 @@ export const addressSchema = z.object({
   country: z.string().trim().length(2),
 });
 export const orderRequestSchema = z.object({
+  checkoutRequestId: z.string().uuid(),
   items: z.array(z.object({ productId: z.string().regex(/^[a-f\d]{24}$/i), quantity: z.number().int().min(1).max(10) })).min(1).max(30),
   shippingAddress: addressSchema,
 }).superRefine(({ items }, ctx) => {
@@ -37,6 +38,9 @@ export const orderRequestSchema = z.object({
 export type Order = {
   userId: string;
   email: string;
+  checkoutRequestId?: string;
+  stripeCheckoutSessionId?: string;
+  stripePaymentIntentId?: string;
   status: "awaiting_payment" | "paid" | "processing" | "shipped" | "delivered" | "cancelled";
   items: { productId: ObjectId; name: string; unitPriceCents: number; quantity: number; lineTotalCents: number }[];
   currency: string;
@@ -44,6 +48,7 @@ export type Order = {
   shippingAddress: z.infer<typeof addressSchema>;
   createdAt: Date;
   updatedAt: Date;
+  paidAt?: Date;
 };
 
 type ProductDocument = z.infer<typeof productSchema>;
@@ -58,6 +63,9 @@ export async function ensureStoreIndexes() {
     db.collection("products").createIndex({ active: 1, category: 1 }),
     db.collection("orders").createIndex({ userId: 1, createdAt: -1 }),
     db.collection("orders").createIndex({ status: 1, createdAt: -1 }),
+    db.collection("orders").createIndex({ userId: 1, checkoutRequestId: 1 }, { unique: true, partialFilterExpression: { checkoutRequestId: { $type: "string" } } }),
+    db.collection("orders").createIndex({ stripeCheckoutSessionId: 1 }, { unique: true, sparse: true }),
+    db.collection("stripeEvents").createIndex({ eventId: 1 }, { unique: true }),
   ]);
 }
 
