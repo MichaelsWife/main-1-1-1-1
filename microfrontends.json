@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/microfrontends.json",
+  "applications": {
+    "therapture": {
+      "development": {
+        "fallback": "therapture-one.vercel.app"
+      }
+    }
+  }
+}
